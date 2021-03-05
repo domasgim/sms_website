@@ -70,7 +70,7 @@ class SentMessageController extends Controller
             $response_message = 'SMS sender not running.';
         } else 
         {
-            $response_message = 'Something went wrong.';
+            $response_message = 'Something went wrong.'; /* A timeout occured while receiving a ZMQ signal, maybe the program crashed */
         }
 
         return [
@@ -125,7 +125,10 @@ class SentMessageController extends Controller
     }
 
     /**
-     * Listen for a ZMQ response in a given address
+     * Listen for a ZMQ response in a given address. Return codes: 
+     * 10: message sent
+     * -10: an error occured while sending the message
+     * -11: sms_receiver program is not running
      */
     public function zmq_pull($address, $processName)
     {
