@@ -1,0 +1,5 @@
+{
+    "CURL_URL":"http://localhost:8000/api",
+    "SERIAL_PORT":"/dev/ttyUSB2",
+    "RECIPIENT_NUMBER":"+37065259965"
+}

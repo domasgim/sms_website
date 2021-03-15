@@ -1,7 +1,7 @@
 //
 // Created by hitmoon on 15-12-17.
 //
-#include "utf.h"
+#include "../include/utf.h"
 #include <stdio.h>
 #include <wchar.h>
 #include <string.h>

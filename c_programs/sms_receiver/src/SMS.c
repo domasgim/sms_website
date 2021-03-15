@@ -5,9 +5,9 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "SMS.h"
-#include "alphabet.h"
-#include "pdu.h"
+#include "../include/SMS.h"
+#include "../include/alphabet.h"
+#include "../include/pdu.h"
 
 #define SUB_STR_SIZE 512
 char temp[SUB_STR_SIZE];
@@ -119,8 +119,10 @@ struct SMS_Struct PDUDecoding(const char *data) {
         sms.UDH = NULL;
     }
 
+    sms.BIT7Data = UserDataDecoding_BIT7(data, end_index, sms.UDHI, sms.DCS);
+
     // 用户数据
-    sms.UD = UserDataDecoding(data, end_index, sms.UDHI, sms.DCS);
+    sms.UD = UserDataDecoding(data, end_index, sms.UDHI, sms.DCS, sms.BIT7Data);
 
     return sms;
 }
@@ -271,7 +273,34 @@ struct UDHS *UDHDecoding(const char *data, int index) {
     return result;
 }
 
-char *UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS dcs) {
+char * UserDataDecoding_BIT7(const char *data, int index, bool UDHI, enum EnumDCS dcs) {
+
+    // 用户数据区长度
+    int UDL = strtol(sub_str(data, index, 2), NULL, 16);
+    index += 2;
+
+    // 跳过用户数据头
+    int UDHL = 0;
+    if (UDHI) {
+        // 用户数据头长度
+        UDHL = strtol(sub_str(data, index, 2), NULL, 16);
+        UDHL++;
+        index += UDHL << 1;
+
+    }
+    
+    if (dcs == BIT7) {
+        int Septets = UDL - (UDHL * 8 + 6) / 7;           // 7-Bit编码字符数
+
+        int FillBits = (UDHL * 8 + 6) / 7 * 7 - UDHL * 8; //  填充位数
+        char *BIT7Unpack_result = BIT7Unpack(data, index, Septets, FillBits);
+        return BIT7Unpack_result;
+    }
+
+    return "Error!";
+}
+
+char *UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS dcs, char *BIT7Data) {
     char *result = NULL;
     char *buf;
 
@@ -312,7 +341,8 @@ char *UserDataDecoding(const char *data, int index, bool UDHI, enum EnumDCS dcs)
         int Septets = UDL - (UDHL * 8 + 6) / 7;           // 7-Bit编码字符数
 
         int FillBits = (UDHL * 8 + 6) / 7 * 7 - UDHL * 8; //  填充位数
-        return BIT7Decoding(BIT7Unpack(data, index, Septets, FillBits), Septets);
+        //char *BIT7Unpack_result = BIT7Unpack(data, index, Septets, FillBits);
+        return BIT7Decoding(BIT7Data, Septets);
     }
     else {// 8Bit编码
         // 获取数据长度
@@ -399,7 +429,7 @@ char *BIT7Decoding(char *BIT7Data, unsigned int size)
         else {// 异常数据
             sprintf(buf++, "?");
         }
-
+        //free(BIT7Data);
     }
     return result;
 

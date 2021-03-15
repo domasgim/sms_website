@@ -1,0 +1,5 @@
+{
+    "ZMQ_PUSH":"tcp://127.0.0.1:5540",
+    "ZMQ_PULL":"tcp://127.0.0.1:5555",
+    "SERIAL_PORT":"/dev/ttyUSB2"
+}

@@ -23,10 +23,10 @@ Either version 2 of the License, or (at your option) any later version.
 #include <iconv.h>
 #include <errno.h>
 #endif
-#include "charset.h"
-#include "logging.h"
-#include "smsd_cfg.h"
-#include "pdu.h"
+#include "../include/charset.h"
+//#include "logging.h"
+#include "../include/smsd_cfg.h"
+#include "../include/pdu.h"
 
 // For incoming character 0x24 conversion:
 // Change this if other than Euro character is wanted, like '?' or '$'.

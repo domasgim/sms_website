@@ -19,10 +19,10 @@ Either version 2 of the License, or (at your option) any later version.
 #include <stdlib.h>
 #include <ctype.h>
 #include <syslog.h>
-#include "pdu.h"
-#include "smsd_cfg.h"
+#include "../include/pdu.h"
+#include "../include/smsd_cfg.h"
 // #include "logging.h"
-#include "charset.h" // required for conversions of partial text content.
+#include "../include/charset.h" // required for conversions of partial text content.
 
 #define MAX_ADDRESS_LENGTH 50
 #define MAX_SMSC_ADDRESS_LENGTH 30
