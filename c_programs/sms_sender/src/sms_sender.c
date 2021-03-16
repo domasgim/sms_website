@@ -11,10 +11,16 @@
 #include <zmq.h>
 
 #include "../include/cJSON.h"
-//#include "../include/zhelpers.h"
 #include "../include/sms_sender.h"
 
 #define CONFIG_PATH "sms_sender_config.json"
+
+/* debug macro for printing additional info; compile it with -DDEBUG flag */
+#ifdef DEBUG
+# define DEBUG_PRINT(x) printf x
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
 
 int signal_received = 0;
 
@@ -29,34 +35,27 @@ int s_send (void *socket, char *string) {
 }
 
 char * s_recv (void *socket) {
-    enum { cap = 2048 };
-    char buffer [cap];
-    int size = zmq_recv (socket, buffer, cap - 1, 0);
+    char buffer [2048];
+    int size = zmq_recv (socket, buffer, 2048 - 1, 0);
     if (size == -1)
         return NULL;
-    buffer[size < cap ? size : cap - 1] = '\0';
+    buffer[size < 2048 ? size : 2048 - 1] = '\0';
     return strndup (buffer, sizeof(buffer) - 1);
 }
 
-void process_pdu_return(char msg[], int size, void *push) {
+int process_pdu_return(char msg[], int size) {
     for (int i = 0; i < size; i++) {
         if (msg[i] == '+' && msg[i + 1] == 'C' && msg[i + 2] == 'M' && 
             msg[i + 3] == 'S' && msg[i + 5] == 'E' && msg[i + 6] == 'R' 
             && msg[i + 7] == 'R' && msg[i + 8] == 'O' && msg[i + 6] == 'R') {
-                printf("Failed to send a message\n");
                 printf("GSM return: %s", msg);
-                s_send(push, "-10");
-                printf("ZMQ sent\n");
-                return;
+                return -1;
         }
     }
-    printf("Message sent successfuly\n");
-    s_send(push, "10");
-    printf("ZMQ sent\n");
-    return;
+    return 0;
 }
 
-int containsNonASCII(char message[]) {
+int contains_non_ascii(char message[]) {
     for (int i = 0; i < strlen(message); i++) {
         if ((unsigned char)message[i] > 127) {
             return 1;
@@ -66,6 +65,7 @@ int containsNonASCII(char message[]) {
 }
 
 void send_gsm_msg(char msg[], int serial_port) {
+    DEBUG_PRINT(("Sending %s\n", msg));
     //printf("Sending %s\n", msg);
     char read_buf [256];
     write(serial_port, msg, strlen(msg));
@@ -74,22 +74,24 @@ void send_gsm_msg(char msg[], int serial_port) {
         fprintf(stderr, "(%s:%d) error reading serial port - %s\n", __FILE__, __LINE__, strerror(errno)); 
         return;
     }
+    DEBUG_PRINT(("Read %i bytes. Received message: %s", num_bytes, read_buf));
     //printf("Read %i bytes. Received message: %s", num_bytes, read_buf);
     return;
 }
 
-void send_gsm_msg_last(char msg[], int serial_port, void *push) {
+int send_gsm_msg_last(char msg[], int serial_port) {
+    DEBUG_PRINT(("Sending %s\n", msg));
     //printf("Sending %s\n", msg);
     char read_buf [256];
     write(serial_port, msg, strlen(msg));
     int num_bytes = read(serial_port, &read_buf, sizeof(read_buf));
     if (num_bytes < 0) {
         fprintf(stderr, "(%s:%d) error reading serial port - %s\n", __FILE__, __LINE__, strerror(errno)); 
-        return;
+        return -2;
     }
+    DEBUG_PRINT(("Read %i bytes. Received message: %s", num_bytes, read_buf));
     //printf("Read %i bytes. Received message: %s", num_bytes, read_buf);
-    process_pdu_return(read_buf, num_bytes, push);
-    return;
+    return process_pdu_return(read_buf, num_bytes);;
 }
 
 int process_signal(char msg[], int size) {
@@ -115,19 +117,19 @@ int process_signal(char msg[], int size) {
     return 0;
 }
 
-int check_signal(int serial_port) {
+int get_signal(int serial_port) {
     char msg[] = "AT+CSQ\r";
     printf("Checking signal strength...\n");
 
     char read_buf [256];
+    DEBUG_PRINT(("Sending %s\n", msg));
     write(serial_port, msg, strlen(msg));
     int num_bytes = read(serial_port, &read_buf, sizeof(read_buf));
     if (num_bytes < 0) {
         fprintf(stderr, "(%s:%d) error reading serial port - %s\n", __FILE__, __LINE__, strerror(errno)); 
         return -1;
     }
-    //printf("Read %i bytes. Received message: %s", num_bytes, read_buf);
-
+    DEBUG_PRINT(("Read %i bytes. Received message: %s", num_bytes, read_buf));
     return process_signal(read_buf, num_bytes);
 }
 
@@ -252,7 +254,15 @@ int send_sms(int serial_port, int is_last_message, void *push, char recipient[],
     send_gsm_msg(cmd1, serial_port);
     send_gsm_msg(cmd2, serial_port);
     if(is_last_message) {
-        send_gsm_msg_last(pdu_modified, serial_port, push);
+        if(send_gsm_msg_last(pdu_modified, serial_port) == 0) {
+            printf("Message sent successfuly\n");
+            s_send(push, "10");
+            printf("ZMQ sent\n");
+        } else {
+            printf("Error sending message\n");
+            s_send(push, "-10");
+            printf("ZMQ sent\n");
+        }
     } else {
         send_gsm_msg(pdu_modified, serial_port);
     }
@@ -261,72 +271,43 @@ int send_sms(int serial_port, int is_last_message, void *push, char recipient[],
 }
 
 int process_sms_data(int serial_port, char recipient[], char message[], void *push) {
-    int contains_non_ascii = containsNonASCII(message);
+    int ascii_flag = contains_non_ascii(message);
     int ref_no = rand() % 100;
     srand(time(0));
+    int max_characters = 153;
+    int last_msg_flag = 1;
+    if (ascii_flag != 0) {
+        max_characters = 63;
+    }
 
-
-    if (contains_non_ascii == 0) {
-        char split_message[154];
-        memset(split_message, 0, sizeof(split_message));
-        int divisions = strlen(message) / 153;
-        divisions++; 
-        if (divisions > 1) {
-            for (int i = 0; i < divisions; i++) {
+    char split_message[max_characters];
+    memset(split_message, 0, sizeof(split_message));
+    int divisions = strlen(message) / max_characters;
+    divisions++; 
+    if (divisions > 1) {
+        for (int i = 0; i < divisions; i++) {
             int iterations = 0;
             for (int j = 0; j < strlen(message); j++) {
-                if (iterations == 153) {
+                if (iterations == max_characters) {
                     split_message[j] = '\0';
                     break;
                 }
                 iterations++;
-                split_message[j] = message[153 * i + j];
+                split_message[j] = message[max_characters * i + j];
             }
-
             char udh_data[18];
             sprintf(udh_data, "05 00 03 %02hhX %02hhX %02hhX", ref_no, divisions, i + 1);
 
             if(i == divisions - 1) {
-                    send_sms(serial_port, 1, push, recipient, split_message, 1, udh_data, 0);
+                last_msg_flag = 1;
             } else {
-                    send_sms(serial_port, 0, push, recipient, split_message, 1, udh_data, 0);
+                last_msg_flag = 0;
             }
+            send_sms(serial_port, last_msg_flag, push, recipient, split_message, 1, udh_data, 0);
             memset(split_message,0,sizeof(split_message));
         }
-        } else {
-            send_sms(serial_port, 1, push, recipient, message, 0, "", 0);
-        }
-
     } else {
-        char split_message[63];
-        memset(split_message,0,sizeof(split_message));
-        int divisions = strlen(message) / 63;
-        divisions++; 
-
-        if (divisions > 1) {
-            for (int i = 0; i < divisions; i++) {
-                int iterations = 0;
-                for (int j = 0; j < strlen(message); j++) {
-                    if (iterations == 63) {
-                        break;
-                    }
-                    iterations++;
-                    split_message[j] = message[63 * i + j];
-                }
-
-                char udh_data[18];
-                sprintf(udh_data, "05 00 03 %02hhX %02hhX %02hhX", ref_no, divisions, i + 1);
-                if(i == divisions - 1) {
-                    send_sms(serial_port, 1, push, recipient, split_message, 1, udh_data, 2);
-
-                } else {
-                   send_sms(serial_port, 0, push, recipient, split_message, 1, udh_data, 2);
-                }
-                memset(split_message,0,sizeof(split_message));
-            }
-        } else {
-            send_sms(serial_port, 1, push, recipient, message, 0, "", 2);
-        }
+        send_sms(serial_port, 1, push, recipient, message, 0, "", 0);
     }
     return 0;
 }
@@ -429,10 +410,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "(%s:%d) error connecting to %s - %s\n",  __FILE__, __LINE__, 
             push_address->valuestring, strerror(errno));
         cJSON_Delete(config_json);
-        zmq_close(zmq_push);
-        zmq_close(zmq_pull);
-        zmq_ctx_destroy(context);
-        exit(-1);
+        goto end;
     }
 
     rc = zmq_bind (zmq_pull, pull_address->valuestring);
@@ -440,10 +418,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "(%s:%d) error connecting to %s - %s\n",  __FILE__, __LINE__, 
             pull_address->valuestring, strerror(errno));
         cJSON_Delete(config_json);
-        zmq_close(zmq_push);
-        zmq_close(zmq_pull);
-        zmq_ctx_destroy(context);
-        exit(-1);
+        goto end;
     }
 
     /* Sockets are binded, we won't be needing these addresses anymore */
@@ -451,9 +426,9 @@ int main(int argc, char **argv) {
 
     /* Setting push socket so it times out after a given time */
     zmq_setsockopt(zmq_push, ZMQ_SNDTIMEO, &timeout, sizeof(int));
-
-    if (check_signal(serial_port) == -1) {
-        goto end_error;
+    rc = get_signal(serial_port);
+    if (rc == -1) {
+        goto end;
     }
 
     printf("Ready, waiting for messages...\n");
@@ -473,10 +448,10 @@ int main(int argc, char **argv) {
         if (received_messsage_json == NULL) {
             const char *error_ptr = cJSON_GetErrorPtr();
             if (error_ptr != NULL) {
+                rc = -1;
                 fprintf(stderr, "(%s:%d) error parsing json before: %s\n", __FILE__, __LINE__, error_ptr);
                 cJSON_Delete(received_messsage_json);
-                goto end_error;
-                exit(-1);
+                goto end;
             }
         }
 
@@ -491,7 +466,8 @@ int main(int argc, char **argv) {
         if(recipient == NULL || message == NULL) {
             fprintf(stderr, "(%s:%d) error getting json object\n", __FILE__, __LINE__);
             cJSON_Delete(received_messsage_json);
-            goto end_error;
+            rc = -1;
+            goto end;
         }
         char *recipient_modified = recipient->valuestring;
         recipient_modified++;
@@ -507,20 +483,12 @@ int main(int argc, char **argv) {
         free(received_messsage_zmq);
     }
 
-    /* CLOSE SERIAL PORT */
-
     /* Finishing the program */
-    goto end;
     end:
+        close(serial_port);
         zmq_close(zmq_push);
         zmq_close(zmq_pull);
         zmq_ctx_destroy(context);
-        printf("Successfuly finished\n");
-        return 0;
-    end_error:
-        zmq_close(zmq_push);
-        zmq_close(zmq_pull);
-        zmq_ctx_destroy(context);
-        printf("Error\n");
-        return -1;
+        printf("Safely finished\n");
+        return rc;
 }

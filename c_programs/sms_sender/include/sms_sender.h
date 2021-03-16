@@ -15,8 +15,9 @@ void handler();
  * @param msg Return value from a serial port
  * @param size Size of msg string
  * @param push ZMQ push socket, used to send a message to a web browser
+ * @return int 0 for success, -1 for error
  */
-void process_pdu_return(char msg[], int size, void *push);
+int process_pdu_return(char msg[], int size);
 
 /**
  * @brief Check if a string contains non ASCII characters
@@ -24,7 +25,7 @@ void process_pdu_return(char msg[], int size, void *push);
  * @param message Input string
  * @return int 0 - true; 1 - false;
  */
-int containsNonASCII(char message[]);
+int contains_non_ascii(char message[]);
 
 /**
  * @brief Send out an AT command to serial port
@@ -39,8 +40,9 @@ void send_gsm_msg(char msg[], int serial_port);
  * 
  * @param msg PDU code
  * @param serial_port Serial port file descriptor
+ * @return int 0 for success, -1 for error while sending SMS, -2 for error with file descriptor
  */
-void send_gsm_msg_last(char msg[], int serial_port, void *push);
+int send_gsm_msg_last(char msg[], int serial_port);
 
 /**
  * @brief Process signal strength information returned by the modem if there is any information regarding the signal strength.
@@ -52,12 +54,12 @@ void send_gsm_msg_last(char msg[], int serial_port, void *push);
 int process_signal(char msg[], int size);
 
 /**
- * @brief Check if the modem has signal
+ * @brief Get signal strength
  * 
  * @param serial_port Opened serial port descriptor of the connected modem (usually /dev/ttyUSB[0-5])
  * @return int 0 for success, otherwise -1
  */
-int check_signal(int serial_port);
+int get_signal(int serial_port);
 
 /**
  * @brief Set the up tty object
