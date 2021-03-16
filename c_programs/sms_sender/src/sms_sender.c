@@ -275,9 +275,11 @@ int process_sms_data(int serial_port, char recipient[], char message[], void *pu
     int ref_no = rand() % 100;
     srand(time(0));
     int max_characters = 153;
+    int alphabet = 0;
     int last_msg_flag = 1;
     if (ascii_flag != 0) {
         max_characters = 63;
+        alphabet = 2;
     }
 
     char split_message[max_characters];
@@ -303,11 +305,11 @@ int process_sms_data(int serial_port, char recipient[], char message[], void *pu
             } else {
                 last_msg_flag = 0;
             }
-            send_sms(serial_port, last_msg_flag, push, recipient, split_message, 1, udh_data, 0);
+            send_sms(serial_port, last_msg_flag, push, recipient, split_message, 1, udh_data, alphabet);
             memset(split_message,0,sizeof(split_message));
         }
     } else {
-        send_sms(serial_port, 1, push, recipient, message, 0, "", 0);
+        send_sms(serial_port, 1, push, recipient, message, 0, "", alphabet);
     }
     return 0;
 }
