@@ -9,6 +9,7 @@
 #include <fcntl.h>      /* File controls: O_RDWR */
 #include <iconv.h>      /* UTF16 conversions */
 #include <zmq.h>
+#include <stdatomic.h>
 
 #include "../include/cJSON.h"
 #include "../include/sms_sender.h"
@@ -22,7 +23,7 @@
 # define DEBUG_PRINT(x) do {} while (0)
 #endif
 
-int signal_received = 0;
+atomic_int signal_received = 0;
 
 void handler() {
     signal_received = 1;
