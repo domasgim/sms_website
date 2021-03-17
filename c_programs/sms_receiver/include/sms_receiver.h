@@ -42,7 +42,7 @@ void process_all_pdus(char curl_address[], char recipient_number[]);
  * @param msg AT command. Must be terminated with \\r\.
  * @param serial_port Opened serial port descriptor of the connected modem (usually /dev/ttyUSB[0-5])
  */
-void send_gsm_msg(char msg[], int serial_port);
+int send_gsm_msg(char msg[], int serial_port);
 
 /**
  * @brief Send a post request to a web server
@@ -50,7 +50,7 @@ void send_gsm_msg(char msg[], int serial_port);
  * @param json_message JSON string to be sent over curl
  * @param url URL address for the request to be sent
  */
-void send_post_request(char json_message[], char *url);
+int send_post_request(char json_message[], char *url);
 
 /**
  * @brief Prepare the modem for processing the messages in PDU format and deletes all pre-existing messages inside the modem.
@@ -74,7 +74,7 @@ int process_signal(char msg[], int size);
  * @param serial_port Opened serial port descriptor of the connected modem (usually /dev/ttyUSB[0-5])
  * @return int 0 for success, otherwise -1
  */
-int check_signal(int serial_port);
+int get_signal(int serial_port);
 
 /**
  * @brief Set the up tty object

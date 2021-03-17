@@ -33,7 +33,7 @@ int contains_non_ascii(char message[]);
  * @param msg Command
  * @param serial_port Serial port file descriptor
  */
-void send_gsm_msg(char msg[], int serial_port);
+int send_gsm_msg(char msg[], int serial_port);
 
 /**
  * @brief Send out a PDU code through a serial port and process it

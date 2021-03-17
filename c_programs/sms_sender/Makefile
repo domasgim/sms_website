@@ -3,7 +3,7 @@ CFLAGS=-Wall -D NUMBER_OF_MODEMS=1
 
 all: sms_sender
 
-sms_sender_debug:	src/sms_sender_debug.o src/pdu.o
+sms_sender_debug:	sms_sender_debug.o src/pdu.o
 	$(CC) $(CFLAGS) src/cJSON.c src/sms_sender_debug.o src/pdu.o -lzmq -o sms_sender
 
 sms_sender:	src/sms_sender.o src/pdu.o

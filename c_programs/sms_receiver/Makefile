@@ -6,8 +6,14 @@ all: sms_receiver
 sms_receiver:	sms_receiver.o SMS.o utf.o pdu.o list.o list_iterator.o list_node.o
 	$(CC) $(CFLAGS) src/cJSON.c src/sms_receiver.o src/SMS.o src/utf.o src/pdu.o src/list.o src/list_iterator.o src/list_node.o -lcurl -o sms_receiver
 
+sms_receiver_debug:	sms_receiver_debug.o SMS.o utf.o pdu.o list.o list_iterator.o list_node.o
+	$(CC) $(CFLAGS) src/cJSON.c src/sms_receiver.o src/SMS.o src/utf.o src/pdu.o src/list.o src/list_iterator.o src/list_node.o -lcurl -o sms_receiver
+
 sms_receiver.o: src/sms_receiver.c
 	$(CC) $(CFLAGS) -c src/sms_receiver.c -o src/sms_receiver.o
+
+sms_receiver_debug.o: src/sms_receiver.c
+	$(CC) $(CFLAGS) -c -DDEBUG src/sms_receiver.c -o src/sms_receiver.o
 
 SMS.o: src/SMS.c
 	$(CC) $(CFLAGS) -c src/SMS.c -o src/SMS.o

@@ -9,6 +9,7 @@
 #include <fcntl.h>      /* File controls: O_RDWR */
 #include <iconv.h>      /* UTF16 conversions */
 #include <stdint.h>
+#include <stdatomic.h>
 
 #include "../include/cJSON.h"
 #include "../include/SMS.h"
@@ -17,7 +18,14 @@
 
 #define CONFIG_PATH "sms_receiver_config.json"
 
-int signal_received = 0;
+/* debug macro for printing additional info; compile it with -DDEBUG flag */
+#ifdef DEBUG
+# define DEBUG_PRINT(x) printf x
+#else
+# define DEBUG_PRINT(x) do {} while (0)
+#endif
+
+atomic_int signal_received = 0;
 
 struct SMS_Struct sms_list[32];
 int sms_list_size = 0;
@@ -230,18 +238,18 @@ void process_all_pdus(char curl_address[], char recipient_number[]) {
     }
 }
 
-void send_gsm_msg(char msg[], int serial_port) {
-    //printf("Sending %s\n", msg);
+int send_gsm_msg(char msg[], int serial_port) {
+    DEBUG_PRINT(("Sending %s\n", msg));
     char read_buf [65536];
     write(serial_port, msg, strlen(msg));
     int num_bytes = read(serial_port, &read_buf, sizeof(read_buf));
     if (num_bytes < 0) {
         fprintf(stderr, "(%s:%d) error reading serial port - %s\n", __FILE__, __LINE__, strerror(errno)); 
-        return;
+        return -1;
     }
-    //printf("Read %i bytes. Received message: %s", num_bytes, read_buf);
+    DEBUG_PRINT(("Read %i bytes. Received message: %s", num_bytes, read_buf));
     process_CMGL(read_buf, num_bytes);
-    return;
+    return 0;
 }
 
 size_t curl_callback (void *contents, size_t size, size_t nmemb, void *userp) {
@@ -322,7 +330,7 @@ CURLcode curl_fetch_url(CURL *ch, const char *url, struct curl_fetch_st *fetch) 
     return rcode;
 }
 
-void send_post_request(char json_message[], char *url) {
+int send_post_request(char json_message[], char *url) {
     CURL *ch;                                               /* curl handle */
     CURLcode rcode;
 
@@ -335,7 +343,7 @@ void send_post_request(char json_message[], char *url) {
         /* log error */
         fprintf(stderr, "ERROR: Failed to create curl handle in fetch_session");
         /* return error */
-        return;
+        return -1;
     }
 
     /* set content type */
@@ -362,7 +370,7 @@ void send_post_request(char json_message[], char *url) {
         fprintf(stderr, "ERROR: Failed to fetch url (%s) - curl said: %s",
             url, curl_easy_strerror(rcode));
         /* return error */
-        return;
+        return -1;
     }
 
     /* check payload */
@@ -377,10 +385,10 @@ void send_post_request(char json_message[], char *url) {
         /* free payload */
         free(cf->payload);
         /* return */
-        return;
+        return -1;
     }
 
-    return;
+    return 0;
 }
 
 void prepare_modem(int serial_port) {
@@ -421,7 +429,7 @@ int process_signal(char msg[], int size) {
     return 0;
 }
 
-int check_signal(int serial_port) {
+int get_signal(int serial_port) {
     char msg[] = "AT+CSQ\r";
     printf("Checking signal strength...\n");
 
@@ -550,13 +558,14 @@ int main() {
         cJSON_Delete(config_json);
         exit(-1);
     }
-
-    if (setup_tty(serial_port) == -1) {
-        goto end_error;
+    int rc = setup_tty(serial_port);
+    if (rc == -1) {
+        goto end;
     }
 
-    if (check_signal(serial_port) == -1) {
-        goto end_error;
+    rc = get_signal(serial_port);
+    if (rc == -1) {
+        goto end;
     }
 
     prepare_modem(serial_port);
@@ -576,14 +585,9 @@ int main() {
         sleep(5);
     }
 
-    goto end;
     end:
+        close(serial_port);
         cJSON_Delete(config_json);
-        printf("Successfuly finished\n");
-        return 0;
-
-    end_error:
-        cJSON_Delete(config_json);
-        printf("Error\n");
-        return -1;
+        printf("Safely finished\n");
+        return rc;
 }

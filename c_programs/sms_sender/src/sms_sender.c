@@ -65,19 +65,17 @@ int contains_non_ascii(char message[]) {
     return 0;
 }
 
-void send_gsm_msg(char msg[], int serial_port) {
+int send_gsm_msg(char msg[], int serial_port) {
     DEBUG_PRINT(("Sending %s\n", msg));
-    //printf("Sending %s\n", msg);
     char read_buf [256];
     write(serial_port, msg, strlen(msg));
     int num_bytes = read(serial_port, &read_buf, sizeof(read_buf));
     if (num_bytes < 0) {
         fprintf(stderr, "(%s:%d) error reading serial port - %s\n", __FILE__, __LINE__, strerror(errno)); 
-        return;
+        return -1;
     }
     DEBUG_PRINT(("Read %i bytes. Received message: %s", num_bytes, read_buf));
-    //printf("Read %i bytes. Received message: %s", num_bytes, read_buf);
-    return;
+    return 0;
 }
 
 int send_gsm_msg_last(char msg[], int serial_port) {
